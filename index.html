@@ -1,1 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Raster Master — Sprite / Icon / Map / Animation Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #0a0a12;
+    --bg-card: #12121e;
+    --bg-card-hover: #1a1a2e;
+    --accent-cyan: #00e5ff;
+    --accent-magenta: #ff00aa;
+    --accent-amber: #ffb300;
+    --accent-green: #39ff14;
+    --text-primary: #e8e6f0;
+    --text-muted: #8a87a0;
+    --text-dim: #5a576e;
+    --border: #2a2840;
+    --glow-cyan: 0 0 30px rgba(0,229,255,0.15);
+    --glow-magenta: 0 0 30px rgba(255,0,170,0.15);
+    --pixel-size: 4px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'IBM Plex Mono', monospace;
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    overflow-x: hidden;
+    line-height: 1.7;
+  }
+
+  /* === SCANLINE OVERLAY === */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* === GRID BACKGROUND === */
+  .grid-bg {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    z-index: 0;
+  }
+
+  /* === FLOATING PIXELS === */
+  .pixel-field {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .pixel {
+    position: absolute;
+    width: var(--pixel-size);
+    height: var(--pixel-size);
+    opacity: 0;
+    animation: pixelFloat 8s infinite;
+  }
+  @keyframes pixelFloat {
+    0% { opacity: 0; transform: translateY(100vh) scale(0); }
+    10% { opacity: 0.6; }
+    90% { opacity: 0.6; }
+    100% { opacity: 0; transform: translateY(-10vh) scale(1); }
+  }
+
+  /* === LAYOUT === */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* === NAV === */
+  nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    padding: 16px 0;
+    background: rgba(10,10,18,0.85);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
+  nav .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .nav-logo {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 13px;
+    color: var(--accent-cyan);
+    text-decoration: none;
+    letter-spacing: 1px;
+    text-shadow: 0 0 12px rgba(0,229,255,0.4);
+  }
+  .nav-links { display: flex; gap: 28px; align-items: center; }
+  .nav-links a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: color 0.3s;
+  }
+  .nav-links a:hover { color: var(--accent-cyan); }
+  .nav-cta {
+    background: var(--accent-cyan) !important;
+    color: var(--bg-deep) !important;
+    padding: 8px 20px !important;
+    font-weight: 600 !important;
+    font-size: 11px !important;
+    border: none;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    transition: all 0.3s;
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  }
+  .nav-cta:hover {
+    background: #fff !important;
+    box-shadow: 0 0 24px rgba(0,229,255,0.4);
+  }
+
+  /* === HERO === */
+  .hero {
+    padding: 160px 0 100px;
+    text-align: center;
+    position: relative;
+  }
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0,229,255,0.08);
+    border: 1px solid rgba(0,229,255,0.2);
+    padding: 6px 16px;
+    font-size: 11px;
+    color: var(--accent-cyan);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+    animation: fadeInDown 0.8s ease-out;
+    clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+  }
+  .hero-badge .dot {
+    width: 6px; height: 6px;
+    background: var(--accent-green);
+    border-radius: 0;
+    animation: blink 1.5s infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .hero h1 {
+    font-family: 'Press Start 2P', cursive;
+    font-size: clamp(28px, 5vw, 52px);
+    line-height: 1.3;
+    margin-bottom: 8px;
+    animation: fadeInDown 0.8s ease-out 0.15s both;
+  }
+  .hero h1 .cyan { color: var(--accent-cyan); text-shadow: 0 0 40px rgba(0,229,255,0.3); }
+  .hero h1 .magenta { color: var(--accent-magenta); text-shadow: 0 0 40px rgba(255,0,170,0.3); }
+
+  .hero-sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: clamp(13px, 1.6vw, 16px);
+    color: var(--text-muted);
+    max-width: 650px;
+    margin: 24px auto 0;
+    line-height: 1.8;
+    animation: fadeInDown 0.8s ease-out 0.3s both;
+  }
+
+  .hero-tagline {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 10px;
+    color: var(--accent-amber);
+    letter-spacing: 3px;
+    margin-top: 12px;
+    animation: fadeInDown 0.8s ease-out 0.35s both;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 48px;
+    flex-wrap: wrap;
+    animation: fadeInDown 0.8s ease-out 0.45s both;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 32px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  }
+  .btn-primary {
+    background: var(--accent-cyan);
+    color: var(--bg-deep);
+  }
+  .btn-primary:hover {
+    background: #fff;
+    box-shadow: 0 0 40px rgba(0,229,255,0.35);
+    transform: translateY(-2px);
+  }
+  .btn-secondary {
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover {
+    border-color: var(--accent-magenta);
+    color: var(--accent-magenta);
+    box-shadow: var(--glow-magenta);
+    transform: translateY(-2px);
+  }
+
+  .hero-stats {
+    display: flex;
+    gap: 48px;
+    justify-content: center;
+    margin-top: 56px;
+    animation: fadeInDown 0.8s ease-out 0.6s both;
+  }
+  .stat { text-align: center; }
+  .stat-val {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 20px;
+    color: var(--accent-cyan);
+    text-shadow: 0 0 16px rgba(0,229,255,0.3);
+  }
+  .stat-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-top: 8px;
+  }
+
+  /* === SCREENSHOTS === */
+  .screenshots {
+    padding: 60px 0 80px;
+  }
+  .screenshots-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+  }
+  .screenshot-card {
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    overflow: hidden;
+    transition: all 0.4s;
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  }
+  .screenshot-card:hover {
+    border-color: var(--accent-cyan);
+    box-shadow: var(--glow-cyan);
+    transform: translateY(-4px);
+  }
+  .screenshot-card img {
+    width: 100%;
+    height: auto;
+    display: block;
+    image-rendering: auto;
+  }
+  .screenshot-card .caption {
+    padding: 12px 16px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* === SECTION HEADERS === */
+  .section-label {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 10px;
+    color: var(--accent-magenta);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .section-title {
+    font-family: 'Press Start 2P', cursive;
+    font-size: clamp(16px, 2.5vw, 24px);
+    line-height: 1.5;
+    margin-bottom: 16px;
+  }
+  .section-desc {
+    font-size: 14px;
+    color: var(--text-muted);
+    max-width: 600px;
+    line-height: 1.8;
+  }
+
+  /* === FEATURES === */
+  .features {
+    padding: 80px 0;
+  }
+  .features-header {
+    text-align: center;
+    margin-bottom: 60px;
+  }
+  .features-header .section-desc { margin: 0 auto; }
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+  }
+  .feature-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 32px 28px;
+    transition: all 0.4s;
+    position: relative;
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  }
+  .feature-card:hover {
+    border-color: var(--accent-cyan);
+    background: var(--bg-card-hover);
+    transform: translateY(-3px);
+    box-shadow: var(--glow-cyan);
+  }
+  .feature-icon {
+    font-size: 28px;
+    margin-bottom: 16px;
+    display: block;
+  }
+  .feature-card h3 {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 11px;
+    margin-bottom: 12px;
+    color: var(--text-primary);
+    line-height: 1.6;
+  }
+  .feature-card p {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+
+  /* === COMPILERS === */
+  .compilers {
+    padding: 80px 0;
+  }
+  .compilers-header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  .compilers-header .section-desc { margin: 0 auto; }
+  .compiler-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+  }
+  .compiler-tag {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 10px 20px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    transition: all 0.3s;
+    clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+  }
+  .compiler-tag:hover {
+    color: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+    background: rgba(0,229,255,0.05);
+  }
+  .compiler-tag.highlight {
+    border-color: var(--accent-amber);
+    color: var(--accent-amber);
+  }
+
+  /* === FORMATS === */
+  .formats {
+    padding: 80px 0;
+    border-top: 1px solid var(--border);
+  }
+  .formats-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+  }
+  .format-col h3 {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 11px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .format-col h3 .arrow { color: var(--accent-green); }
+  .format-col h3 .arrow.out { color: var(--accent-magenta); }
+  .format-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .format-chip {
+    font-size: 11px;
+    padding: 6px 14px;
+    background: rgba(57,255,20,0.06);
+    border: 1px solid rgba(57,255,20,0.15);
+    color: var(--accent-green);
+    letter-spacing: 0.5px;
+  }
+  .format-chip.out {
+    background: rgba(255,0,170,0.06);
+    border: 1px solid rgba(255,0,170,0.15);
+    color: var(--accent-magenta);
+  }
+
+  /* === CTA === */
+  .cta {
+    padding: 100px 0;
+    text-align: center;
+    border-top: 1px solid var(--border);
+  }
+  .cta-box {
+    background: linear-gradient(135deg, rgba(0,229,255,0.05), rgba(255,0,170,0.05));
+    border: 1px solid var(--border);
+    padding: 64px 48px;
+    max-width: 700px;
+    margin: 0 auto;
+    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+  }
+  .cta-box .section-title { margin-bottom: 16px; }
+  .cta-box p {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-bottom: 32px;
+    line-height: 1.8;
+  }
+  .cta-box .btn-row {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  /* === FOOTER === */
+  footer {
+    padding: 40px 0;
+    border-top: 1px solid var(--border);
+    text-align: center;
+  }
+  footer p {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+  footer a { color: var(--accent-cyan); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  /* === ANIMATIONS === */
+  @keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .fade-in {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: all 0.7s ease-out;
+  }
+  .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* === RESPONSIVE === */
+  @media (max-width: 768px) {
+    .nav-links a:not(.nav-cta) { display: none; }
+    .hero-stats { gap: 24px; }
+    .stat-val { font-size: 16px; }
+    .formats-inner { grid-template-columns: 1fr; gap: 32px; }
+    .cta-box { padding: 40px 24px; }
+  }
+  @media (max-width: 480px) {
+    .hero { padding: 130px 0 70px; }
+    .hero-actions { flex-direction: column; align-items: center; }
+    .btn { width: 100%; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="pixel-field" id="pixelField"></div>
+
+<!-- NAV -->
+<nav>
+  <div class="container">
+    <a href="#" class="nav-logo">RASTER MASTER</a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#compilers">Compilers</a>
+      <a href="#formats">Formats</a>
+      <a href="https://github.com/RetroNick2020/raster-master" target="_blank">GitHub</a>
+      <a href="https://github.com/RetroNick2020/raster-master/releases/latest" target="_blank" class="nav-cta">Download</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      v6.0 R127 &mdash; Latest Release
+    </div>
+
+    <h1>
+      <span class="cyan">RASTER</span><br>
+      <span class="magenta">MASTER</span>
+    </h1>
+
+    <p class="hero-sub">
+      Sprite, Icon, Map, Animation &amp; Sound editor for Windows.<br>
+      Generate embedded code for retro &amp; modern compilers.
+    </p>
+    <p class="hero-tagline">Create. Edit. Export. Ship.</p>
+
+    <div class="hero-actions">
+      <a href="https://github.com/RetroNick2020/raster-master/releases/latest" target="_blank" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1v10M4 7l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="square"/><path d="M2 13h12" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>
+        Download v6.0
+      </a>
+      <a href="https://github.com/RetroNick2020/raster-master" target="_blank" class="btn btn-secondary">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View Source
+      </a>
+    </div>
+
+    <div class="hero-stats">
+      <div class="stat">
+        <div class="stat-val">100</div>
+        <div class="stat-label">Stars</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val">127</div>
+        <div class="stat-label">Releases</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val">333</div>
+        <div class="stat-label">Commits</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val">MIT</div>
+        <div class="stat-label">License</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SCREENSHOTS -->
+<section class="screenshots">
+  <div class="container">
+    <div class="screenshots-grid">
+      <div class="screenshot-card fade-in">
+        <img src="https://raw.githubusercontent.com/wiki/nickshardware/raster-master/images/rm47.png" alt="Raster Master Sprite Editor" loading="lazy">
+        <div class="caption">Sprite Editor</div>
+      </div>
+      <div class="screenshot-card fade-in">
+        <img src="https://raw.githubusercontent.com/wiki/nickshardware/raster-master/images/me1.png" alt="Map Editor" loading="lazy">
+        <div class="caption">Map Editor</div>
+      </div>
+      <div class="screenshot-card fade-in">
+        <img src="https://raw.githubusercontent.com/wiki/nickshardware/raster-master/images/rm55_3.png" alt="Export Options" loading="lazy">
+        <div class="caption">Multi-target Export</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="container">
+    <div class="features-header fade-in">
+      <div class="section-label">// Capabilities</div>
+      <div class="section-title">Everything You Need</div>
+      <p class="section-desc">
+        From pixel editing to code generation — one tool covers the entire
+        retro and modern game graphics pipeline.
+      </p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card fade-in">
+        <span class="feature-icon">🎨</span>
+        <h3>Sprite &amp; Icon Editor</h3>
+        <p>Draw, edit, and manage sprites and icons with support for 2-color, 4-color (CGA), 16-color (EGA/VGA), and full 256-color palettes. Filmstrip thumbnail view for managing multiple images.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">🗺️</span>
+        <h3>Tile Map Editor</h3>
+        <p>Built-in map editor for creating 2D tile-based levels. Export map data alongside your sprites for RPGs, platformers, and puzzle games — all embedded directly in your source code.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">🎞️</span>
+        <h3>Sprite Animation</h3>
+        <p>Sequence sprites into animations with play/stop controls and FPS gauge. Preview and export animation frames for use in any supported target compiler.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">📦</span>
+        <h3>Sprite Sheet Import</h3>
+        <p>Import existing sprite sheets from PNG, BMP, or JPG files and split them into individual sprites. Paste directly from the clipboard for a fast workflow with other editors.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">💾</span>
+        <h3>Project Files</h3>
+        <p>Save all images, maps, and animations into a portable project file. Share projects between machines or collaborators without managing loose files on disk.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">🔊</span>
+        <h3>Sound Effects</h3>
+        <p>Integrated sfxr-style sound generator for creating retro game sound effects, built right into the editor alongside your graphics assets.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">⚡</span>
+        <h3>Code Generation</h3>
+        <p>Export to embedded source code arrays for 20+ compilers. RES text &amp; binary formats package all assets into a single include file — no external loaders needed.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">🌐</span>
+        <h3>Web &amp; Modern Games</h3>
+        <p>Use with raylib and emscripten to build cross-platform games for Windows, Linux, Mac, and fully playable browser games publishable on itch.io.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">🖥️</span>
+        <h3>Amiga Support</h3>
+        <p>Export AmigaBASIC Bobs, VSprites, and PUT format graphics. Supports HiSoft Pascal, FreePascal 68k, and vbcc for native Amiga development.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPILERS -->
+<section class="compilers" id="compilers">
+  <div class="container">
+    <div class="compilers-header fade-in">
+      <div class="section-label">// Supported Targets</div>
+      <div class="section-title">20+ Compilers &amp; Interpreters</div>
+      <p class="section-desc">
+        Generate ready-to-compile code for every language you loved back in the day — and the modern ones you use today.
+      </p>
+    </div>
+    <div class="compiler-grid fade-in">
+      <span class="compiler-tag highlight">raylib</span>
+      <span class="compiler-tag">Turbo Pascal</span>
+      <span class="compiler-tag">FreePascal</span>
+      <span class="compiler-tag">Turbo C</span>
+      <span class="compiler-tag">Quick C</span>
+      <span class="compiler-tag">Open Watcom</span>
+      <span class="compiler-tag">GCC</span>
+      <span class="compiler-tag">QuickBASIC</span>
+      <span class="compiler-tag highlight">QB64</span>
+      <span class="compiler-tag">FreeBASIC</span>
+      <span class="compiler-tag">Turbo Basic</span>
+      <span class="compiler-tag">Power Basic</span>
+      <span class="compiler-tag">GWBASIC</span>
+      <span class="compiler-tag">BASICA</span>
+      <span class="compiler-tag">PC-BASIC</span>
+      <span class="compiler-tag">AmigaBASIC</span>
+      <span class="compiler-tag">Amiga C</span>
+      <span class="compiler-tag">Amiga Pascal</span>
+      <span class="compiler-tag highlight">JavaScript</span>
+      <span class="compiler-tag">Emscripten</span>
+    </div>
+  </div>
+</section>
+
+<!-- FORMATS -->
+<section class="formats" id="formats">
+  <div class="container fade-in">
+    <div style="text-align:center; margin-bottom: 48px;">
+      <div class="section-label">// File Formats</div>
+      <div class="section-title">Import &amp; Export</div>
+    </div>
+    <div class="formats-inner">
+      <div class="format-col">
+        <h3><span class="arrow">▸</span> Import</h3>
+        <div class="format-list">
+          <span class="format-chip">PNG</span>
+          <span class="format-chip">BMP</span>
+          <span class="format-chip">JPG</span>
+          <span class="format-chip">GIF</span>
+          <span class="format-chip">PCX</span>
+          <span class="format-chip">ILBM/LBM</span>
+          <span class="format-chip">XGF</span>
+          <span class="format-chip">Sprite Sheets</span>
+          <span class="format-chip">Clipboard</span>
+        </div>
+      </div>
+      <div class="format-col">
+        <h3><span class="arrow out">▸</span> Export</h3>
+        <div class="format-list">
+          <span class="format-chip out">Source Arrays</span>
+          <span class="format-chip out">RES Text</span>
+          <span class="format-chip out">RES Binary</span>
+          <span class="format-chip out">Sprite Sheets</span>
+          <span class="format-chip out">PNG</span>
+          <span class="format-chip out">BMP</span>
+          <span class="format-chip out">RAW</span>
+          <span class="format-chip out">XGF</span>
+          <span class="format-chip out">VGA Mode X</span>
+          <span class="format-chip out">JS putImageData</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+  <div class="container">
+    <div class="cta-box fade-in">
+      <div class="section-label">// Get Started</div>
+      <div class="section-title">Ready to Create?</div>
+      <p>
+        Free and open source under the MIT license.<br>
+        Windows 7/8/10/11 — 64-bit and 32-bit builds available.
+      </p>
+      <div class="btn-row">
+        <a href="https://github.com/RetroNick2020/raster-master/releases/latest" target="_blank" class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1v10M4 7l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="square"/><path d="M2 13h12" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>
+          Download Latest
+        </a>
+        <a href="https://github.com/RetroNick2020/raster-master-dos" target="_blank" class="btn btn-secondary">
+          DOS Version
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <p>
+      Raster Master &copy; 2021–2026 <a href="https://github.com/RetroNick2020" target="_blank">RetroNick2020</a>
+      &nbsp;&middot;&nbsp;
+      <a href="https://github.com/RetroNick2020/raster-master" target="_blank">Source</a>
+      &nbsp;&middot;&nbsp;
+      <a href="https://github.com/RetroNick2020/raster-master/wiki" target="_blank">Wiki</a>
+      &nbsp;&middot;&nbsp;
+      <a href="https://github.com/RetroNick2020/raster-master/releases" target="_blank">All Releases</a>
+    </p>
+  </div>
+</footer>
+
+<script>
+// Floating pixel particles
+(function() {
+  const field = document.getElementById('pixelField');
+  const colors = ['#00e5ff','#ff00aa','#ffb300','#39ff14','#7c4dff'];
+  for (let i = 0; i < 35; i++) {
+    const px = document.createElement('div');
+    px.className = 'pixel';
+    px.style.left = Math.random() * 100 + '%';
+    px.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+    px.style.animationDelay = Math.random() * 8 + 's';
+    px.style.animationDuration = (6 + Math.random() * 6) + 's';
+    px.style.width = px.style.height = (3 + Math.random() * 4) + 'px';
+    field.appendChild(px);
+  }
+})();
+
+// Intersection observer for fade-in
+(function() {
+  const els = document.querySelectorAll('.fade-in');
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach((e, i) => {
+      if (e.isIntersecting) {
+        setTimeout(() => e.target.classList.add('visible'), i * 80);
+        obs.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.15 });
+  els.forEach(el => obs.observe(el));
+})();
+</script>
+</body>
+</html>
 
